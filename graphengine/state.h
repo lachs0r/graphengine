@@ -15,12 +15,6 @@
 #include "graphengine/namespace.h"
 #include "graphengine/types.h"
 
-#ifndef GRAPHENGINE_ENABLE_GUARD_PAGE
-  #ifndef NDEBUG
-    #define GRAPHENGINE_ENABLE_GUARD_PAGE
-  #endif
-#endif
-
 namespace graphengine {
 namespace GRAPHENGINE_IMPL_NAMESPACE {
 
