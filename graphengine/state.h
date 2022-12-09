@@ -105,30 +105,11 @@ public:
 };
 
 class FrameState {
-#ifdef GRAPHENGINE_ENABLE_GUARD_PAGE
-	struct guard_page {
-		unsigned long page[4096 / sizeof(unsigned long)];
-
-		static constexpr unsigned long pattern() { return static_cast<unsigned long>(0xDEADBEEFDEADBEEF); }
-
-		guard_page() { std::fill_n(page, sizeof(page) / sizeof(page[0]), pattern()); }
-
-		void assert_page() const
-		{
-			for (const auto &word : page) {
-				assert(word == pattern());
-			}
-		}
-	};
-#endif
 	struct node_state {
 		void *context;
 		unsigned left;
 		unsigned right;
 	};
-#ifdef GRAPHENGINE_ENABLE_GUARD_PAGE
-	guard_page **m_guard_pages;
-#endif
 
 	BufferDescriptor *m_caches;
 	node_state *m_nodes;
@@ -146,10 +127,6 @@ public:
 	static size_t metadata_size(size_t num_nodes)
 	{
 		size_t size = 0;
-#ifdef GRAPHENGINE_ENABLE_GUARD_PAGE
-		static_assert(alignof(decltype(*m_guard_pages)) >= alignof(decltype(*m_caches)), "wrong alignment");
-		size += sizeof(guard_page *) * (num_guard_pages(num_nodes) + 1);
-#endif
 		size += sizeof(BufferDescriptor) * NODE_MAX_PLANES * num_nodes; // caches
 		size += sizeof(node_state) * num_nodes; // contexts
 		size += sizeof(unsigned) * num_nodes; // cursors
@@ -173,9 +150,6 @@ public:
 	explicit FrameState(unsigned char *&ptr, size_t num_nodes)
 	{
 		auto allocate = [&](auto *&out, size_t count) { out = reinterpret_cast<decltype(out)>(ptr); ptr += sizeof(*out) * count; };
-#ifdef GRAPHENGINE_ENABLE_GUARD_PAGE
-		allocate(m_guard_pages, num_guard_pages(num_nodes) + 1);
-#endif
 		allocate(m_caches, num_nodes * NODE_MAX_PLANES);
 		allocate(m_nodes, num_nodes);
 		allocate(m_cursors, num_nodes);
@@ -192,20 +166,6 @@ public:
 	void set_cursor(node_id id, unsigned cursor) { m_cursors[id] = cursor; }
 	void set_context(node_id id, void *ptr) { m_nodes[id].context = ptr; }
 	void set_scratchpad(void *ptr) { m_scratchpad = ptr; }
-
-#ifdef GRAPHENGINE_ENABLE_GUARD_PAGE
-	static constexpr size_t guard_page_size() { return sizeof(guard_page); }
-
-	// 1 per buffer, 1 per context, 1 before scratchpad, 1 after scratchpad, 1 null termination
-	static size_t num_guard_pages(size_t num_nodes) { return num_nodes * 2 + 2; }
-
-	void set_guard_page(size_t idx, void *ptr)
-	{
-		if (ptr)
-			new (ptr) guard_page{};
-		m_guard_pages[idx] = static_cast<guard_page *>(ptr);
-	}
-#endif
 
 	void set_callback(size_t endpoint_id, node_id id, Graph::Callback callback)
 	{
@@ -239,11 +199,6 @@ public:
 
 	void check_guard_pages() const
 	{
-#ifdef GRAPHENGINE_ENABLE_GUARD_PAGE
-		for (guard_page **page = m_guard_pages; *page; ++page) {
-			(*page)->assert_page();
-		}
-#endif
 	}
 
 	unsigned cursor(node_id id) const { return m_cursors[id]; }
